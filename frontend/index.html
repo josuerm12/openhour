@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenHour | Hair Appointment Booking</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="#home" aria-label="OpenHour home">
+            <span class="brand-mark">OH</span>
+            <span>OpenHour</span>
+        </a>
+        <nav class="topnav" aria-label="Primary">
+            <button class="nav-link" type="button" data-view="home">Home</button>
+            <button class="nav-link" type="button" data-view="clientCalendar">Book</button>
+            <button class="nav-link" type="button" data-view="donation">Donate</button>
+            <button class="nav-link" type="button" data-view="adminLogin">Owner</button>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero section active" id="home" data-view-panel="home">
+            <div class="hero-media" role="img" aria-label="A polished hair styling station with salon tools"></div>
+            <div class="hero-content">
+                <p class="eyebrow"> Hair Appointment Booking Website</p>
+                <h1>OpenHour</h1>
+                <p class="hero-copy">Book a hairstyle, choose an available time, and secure your appointment on one website!</p>
+                <div class="role-actions" aria-label="Choose how to continue">
+                    <button class="primary-action" type="button" data-view="clientCalendar">I am a client</button>
+                    <button class="secondary-action" type="button" data-view="adminLogin">I am the owner</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="clientCalendar">
+            <div class="panel-intro">
+                <p class="eyebrow">Step 1 of 5</p>
+                <h2>Select a Date</h2>
+                <p>Available days are highlighted. Unavailable or fully booked days are disabled.</p>
+            </div>
+            <div class="calendar-shell">
+                <div class="calendar-header">
+                    <button class="icon-button" type="button" id="prevMonth" aria-label="Previous month">&#8249;</button>
+                    <h3 id="calendarTitle">Month Year</h3>
+                    <button class="icon-button" type="button" id="nextMonth" aria-label="Next month">&#8250;</button>
+                </div>
+                <div class="weekday-row" aria-hidden="true">
+                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div class="calendar-days" id="calendarDays"></div>
+                <div class="legend">
+                    <span><i class="legend-swatch available"></i>Available</span>
+                    <span><i class="legend-swatch booked"></i>Full</span>
+                    <span><i class="legend-swatch closed"></i>Closed</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="timeSelect">
+            <div class="panel-intro">
+                <p class="eyebrow">Step 2 of 5</p>
+                <h2>Select a Time</h2>
+                <p id="selectedDateText">Choose an open time slot for your appointment.</p>
+            </div>
+            <div class="flow-card">
+                <div class="time-list" id="timeList"></div>
+                <div class="flow-actions">
+                    <button class="secondary-action" type="button" data-view="clientCalendar">Previous</button>
+                    <button class="primary-action" type="button" id="continueToInfo" disabled>Continue</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="clientInfo">
+            <div class="panel-intro">
+                <p class="eyebrow">Step 3 of 5</p>
+                <h2>Your Details</h2>
+                <p>Enter contact information and select the service you want to receive.</p>
+            </div>
+            <form class="flow-card form-stack" id="bookingForm" novalidate>
+                <label>
+                    Full name
+                    <input type="text" id="clientName" autocomplete="name" required>
+                    <span class="field-error" data-error-for="clientName"></span>
+                </label>
+                <label>
+                    Email address
+                    <input type="email" id="clientEmail" autocomplete="email" required>
+                    <span class="field-error" data-error-for="clientEmail"></span>
+                </label>
+                <label>
+                    Phone number
+                    <input type="tel" id="clientPhone" autocomplete="tel" required>
+                    <span class="field-error" data-error-for="clientPhone"></span>
+                </label>
+                <label>
+                    Service
+                    <select id="serviceSelect" required></select>
+                    <span class="field-error" data-error-for="serviceSelect"></span>
+                </label>
+                <label>
+                    Notes for the owner
+                    <textarea id="clientNotes" rows="4" placeholder="Style details, length, color notes, or anything helpful"></textarea>
+                </label>
+                <div class="flow-actions">
+                    <button class="secondary-action" type="button" data-view="timeSelect">Previous</button>
+                    <button class="primary-action" type="submit">Continue to Payment</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="payment">
+            <div class="panel-intro">
+                <p class="eyebrow">Step 4 of 5</p>
+                <h2>Deposit</h2>
+                <p>Review your appointment summary before completing the simulated payment.</p>
+            </div>
+            <div class="flow-card">
+                <div class="summary-list" id="paymentSummary"></div>
+                <label class="donation-field">
+                    Optional donation or tip
+                    <input type="number" min="0" step="1" id="donationAmount" value="0">
+                </label>
+                <div class="payment-box">
+                    <span class="card-chip"></span>
+                    <p>Stripe payment placeholder</p>
+                    <small>This prototype records a payment confirmation without processing real money.</small>
+                </div>
+                <div class="flow-actions">
+                    <button class="secondary-action" type="button" data-view="clientInfo">Edit Details</button>
+                    <button class="primary-action" type="button" id="confirmPayment">Pay Deposit</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="confirmation">
+            <div class="panel-intro">
+                <p class="eyebrow">Step 5 of 5</p>
+                <h2>Appointment Confirmed</h2>
+                <p>Your booking is saved. A confirmation summary appears below.</p>
+            </div>
+            <div class="flow-card success-card">
+                <div class="success-icon" aria-hidden="true">&#10003;</div>
+                <div class="summary-list" id="confirmationSummary"></div>
+                <div class="flow-actions">
+                    <button class="secondary-action" type="button" data-view="clientCalendar">Book Another</button>
+                    <button class="danger-action" type="button" id="cancelLatest">Cancel Appointment</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="donation">
+            <div class="panel-intro">
+                <p class="eyebrow">Support my small business</p>
+                <h2>Send a Donation</h2>
+                <p>Help with supplies or leave a tip.</p>
+            </div>
+            <div class="flow-card">
+                <label class="donation-field">
+                    Amount:
+                    <input type="number" min="1" step="1" id="standaloneDonation" value="10">
+                </label>
+                <button class="primary-action wide" type="button" id="sendDonation">Send Donation</button>
+                <p class="status-message" id="donationStatus" role="status"></p>
+            </div>
+        </section>
+
+        <section class="section booking-grid" data-view-panel="adminLogin">
+            <div class="panel-intro">
+                <p class="eyebrow">Owner Access</p>
+                <h2>Sign In</h2>
+                <p>Administrative tools are limited to the business owner.</p>
+            </div>
+            <form class="flow-card form-stack" id="adminForm" novalidate>
+                <label>
+                    Username
+                    <input type="text" id="adminUsername" autocomplete="username" required>
+                    <span class="field-error" data-error-for="adminUsername"></span>
+                </label>
+                <label>
+                    Password
+                    <input type="password" id="adminPassword" autocomplete="current-password" required>
+                    <span class="field-error" data-error-for="adminPassword"></span>
+                </label>
+                <button class="primary-action wide" type="submit">Log In</button>
+                <p class="hint">Prototype login: owner / openhour</p>
+            </form>
+        </section>
+
+        <section class="section admin-layout" data-view-panel="adminDashboard">
+            <aside class="admin-menu">
+                <p class="eyebrow">Owner Dashboard</p>
+                <h2>Manage<br>OpenHour</h2>
+                <button class="admin-tab active" type="button" data-admin-tab="appointments">Appointments</button>
+                <button class="admin-tab" type="button" data-admin-tab="availability">Availability</button>
+                <button class="admin-tab" type="button" data-admin-tab="history">History</button>
+                <button class="secondary-action wide" type="button" id="logoutAdmin">Log Out</button>
+            </aside>
+            <div class="admin-content">
+                <div class="admin-panel active" data-admin-panel="appointments">
+                    <div class="panel-heading">
+                        <h3>Upcoming Appointments</h3>
+                        <span id="appointmentCount">0 booked</span>
+                    </div>
+                    <div class="appointment-list" id="appointmentList"></div>
+                </div>
+                <div class="admin-panel" data-admin-panel="availability">
+                    <div class="panel-heading">
+                        <h3>Publish Availability</h3>
+                        <span>Click a slot to open or block it</span>
+                    </div>
+                    <div class="availability-editor" id="availabilityEditor"></div>
+                </div>
+                <div class="admin-panel" data-admin-panel="history">
+                    <div class="panel-heading">
+                        <h3>Activity Log</h3>
+                        <span>Bookings, cancellations, and payments</span>
+                    </div>
+                    <div class="appointment-list" id="activityLog"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
