@@ -1,8 +1,34 @@
-# Compiled class file
-*.class
+# macOS
+.DS_Store
 
-# Log file
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+application-local.properties
+application-dev.properties
+application-prod.properties
+
+# Logs
 *.log
+logs/
+
+# Java / Spring Boot
+*.class
+target/
+build/
+out/
+
+# Maven wrapper generated files
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle generated files
+.gradle/
 
 # BlueJ files
 *.ctxt
@@ -10,7 +36,7 @@
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
-# Package Files #
+# Package files
 *.jar
 *.war
 *.nar
@@ -18,6 +44,15 @@
 *.zip
 *.tar.gz
 *.rar
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+.parcel-cache/
+.vite/
+
+# Test and coverage output
+coverage/
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
