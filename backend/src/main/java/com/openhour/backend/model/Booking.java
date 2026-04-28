@@ -1,35 +1,31 @@
-package com.openhour.backend.dto;
+package com.openhour.backend.model;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
-public class BookingDTO {
-
+public class Booking {
     private String id;
     private String customerName;
     private String serviceType;
     private LocalDateTime appointmentDate;
-    private String status;
+    private BookingStatus status;
 
-    // Default constructor
-    public BookingDTO() {}
+    public enum BookingStatus {
+        SCHEDULED, CANCELLED
+    }
 
-    // Parameterized constructor
-    public BookingDTO(String customerName, String serviceType, LocalDateTime appointmentDate) {
+    public Booking() {
+        this.id = UUID.randomUUID().toString();
+        this.status = BookingStatus.SCHEDULED;
+    }
+
+    public Booking(String customerName, String serviceType, LocalDateTime appointmentDate) {
+        this();
         this.customerName = customerName;
         this.serviceType = serviceType;
         this.appointmentDate = appointmentDate;
     }
 
-    // Full constructor with ID and status
-    public BookingDTO(String id, String customerName, String serviceType, LocalDateTime appointmentDate, String status) {
-        this.id = id;
-        this.customerName = customerName;
-        this.serviceType = serviceType;
-        this.appointmentDate = appointmentDate;
-        this.status = status;
-    }
-
-    // Getters and Setters
     public String getId() {
         return id;
     }
@@ -62,22 +58,22 @@ public class BookingDTO {
         this.appointmentDate = appointmentDate;
     }
 
-    public String getStatus() {
+    public BookingStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(BookingStatus status) {
         this.status = status;
     }
 
     @Override
     public String toString() {
-        return "BookingDTO{" +
+        return "Booking{" +
                 "id='" + id + '\'' +
                 ", customerName='" + customerName + '\'' +
                 ", serviceType='" + serviceType + '\'' +
                 ", appointmentDate=" + appointmentDate +
-                ", status='" + status + '\'' +
+                ", status=" + status +
                 '}';
     }
 }
