@@ -19,8 +19,6 @@ public record AppointmentResponse(
         int donationCents,
         AppointmentStatus status,
         PaymentStatus paymentStatus,
-        String stripeSessionId,
-        String stripePaymentIntentId,
         Instant createdAt
 ) {
     public static AppointmentResponse from(Appointment appointment) {
@@ -37,8 +35,6 @@ public record AppointmentResponse(
                 appointment.getDonationCents(),
                 appointment.getStatus(),
                 appointment.getPaymentStatus(),
-                appointment.getStripeSessionId(),
-                appointment.getStripePaymentIntentId(),
                 appointment.getCreatedAt()
         );
     }

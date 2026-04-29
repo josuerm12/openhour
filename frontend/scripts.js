@@ -10,6 +10,7 @@ const state = {
     draft: {},
     latestAppointmentId: null,
     adminAuthenticated: false,
+    adminToken: "",
     availability: [],
     daySlots: []
 };
@@ -45,6 +46,10 @@ async function api(path, options = {}) {
         return null;
     }
     return response.json();
+}
+
+function adminHeaders() {
+    return state.adminToken ? { "X-Admin-Token": state.adminToken } : {};
 }
 
 function centsToDollars(cents) {
@@ -320,15 +325,17 @@ async function createAppointment() {
     window.location.href = response.checkoutUrl;
 }
 
-async function cancelAppointment(id) {
+async function cancelAppointment(id, { refreshAdmin = false } = {}) {
     const confirmed = window.confirm("Cancel this appointment?");
     if (!confirmed) {
         return;
     }
-    await api(`/appointments/${id}/cancel`, { method: "PATCH" });
+    await api(`/appointments/${id}/cancel`, { method: "PATCH", headers: adminHeaders() });
     showToast("Appointment cancelled.");
     await renderCalendar();
-    await renderAdmin();
+    if (refreshAdmin) {
+        await renderAdmin();
+    }
 }
 
 async function renderAdmin() {
@@ -336,7 +343,7 @@ async function renderAdmin() {
 }
 
 async function renderAppointments() {
-    const appointments = await api("/appointments");
+    const appointments = await api("/appointments", { headers: adminHeaders() });
     const list = document.querySelector("#appointmentList");
     document.querySelector("#appointmentCount").textContent = `${appointments.length} booked`;
 
@@ -365,7 +372,7 @@ async function renderAppointments() {
     });
 
     list.querySelectorAll("[data-cancel]").forEach((button) => {
-        button.addEventListener("click", () => cancelAppointment(button.dataset.cancel));
+        button.addEventListener("click", () => cancelAppointment(button.dataset.cancel, { refreshAdmin: true }));
     });
 
     list.querySelectorAll("[data-edit]").forEach((button) => {
@@ -374,7 +381,7 @@ async function renderAppointments() {
 }
 
 async function moveAppointment(id) {
-    const appointment = await api(`/appointments/${id}`);
+    const appointment = await api(`/appointments/${id}`, { headers: adminHeaders() });
     const slots = await api(`/availability/day?date=${appointment.date}`);
     const openSlot = slots.find((slot) => slot.open && !slot.booked && slot.time !== appointment.time);
 
@@ -385,6 +392,7 @@ async function moveAppointment(id) {
 
     await api(`/appointments/${id}/move`, {
         method: "PATCH",
+        headers: adminHeaders(),
         body: JSON.stringify({ date: appointment.date, time: openSlot.time })
     });
     showToast(`Appointment moved to ${openSlot.time}.`);
@@ -426,6 +434,7 @@ async function renderAvailabilityEditor() {
 async function toggleSlot(dateKey, time, open) {
     await api("/availability", {
         method: "PUT",
+        headers: adminHeaders(),
         body: JSON.stringify({ date: dateKey, time, open })
     });
     await renderAdmin();
@@ -433,7 +442,7 @@ async function toggleSlot(dateKey, time, open) {
 }
 
 async function renderLog() {
-    const log = await api("/activity");
+    const log = await api("/activity", { headers: adminHeaders() });
     const activityLog = document.querySelector("#activityLog");
 
     if (log.length === 0) {
@@ -513,12 +522,6 @@ document.querySelector("#confirmPayment").addEventListener("click", () => {
     createAppointment().catch((error) => showToast(error.message));
 });
 
-document.querySelector("#cancelLatest").addEventListener("click", () => {
-    if (state.latestAppointmentId) {
-        cancelAppointment(state.latestAppointmentId).then(() => showView("clientCalendar"));
-    }
-});
-
 document.querySelector("#sendDonation").addEventListener("click", async () => {
     const amount = Number(document.querySelector("#standaloneDonation").value || 0);
     const status = document.querySelector("#donationStatus");
@@ -551,6 +554,7 @@ document.querySelector("#adminForm").addEventListener("submit", async (event) =>
         });
         if (result.authenticated) {
             state.adminAuthenticated = true;
+            state.adminToken = result.token;
             await showView("adminDashboard");
         } else {
             setFieldError("adminPassword", "Invalid owner credentials.");
@@ -562,6 +566,7 @@ document.querySelector("#adminForm").addEventListener("submit", async (event) =>
 
 document.querySelector("#logoutAdmin").addEventListener("click", () => {
     state.adminAuthenticated = false;
+    state.adminToken = "";
     showView("home");
 });
 

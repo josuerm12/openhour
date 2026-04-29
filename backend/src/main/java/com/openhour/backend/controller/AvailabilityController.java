@@ -2,6 +2,7 @@ package com.openhour.backend.controller;
 
 import com.openhour.backend.dto.AvailabilitySlotResponse;
 import com.openhour.backend.dto.AvailabilityUpdateRequest;
+import com.openhour.backend.service.AdminAuthService;
 import com.openhour.backend.service.AvailabilityService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -10,6 +11,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/availability")
 public class AvailabilityController {
     private final AvailabilityService availabilityService;
+    private final AdminAuthService adminAuthService;
 
-    public AvailabilityController(AvailabilityService availabilityService) {
+    public AvailabilityController(AvailabilityService availabilityService, AdminAuthService adminAuthService) {
         this.availabilityService = availabilityService;
+        this.adminAuthService = adminAuthService;
     }
 
     @GetMapping
@@ -39,7 +43,11 @@ public class AvailabilityController {
     }
 
     @PutMapping
-    public AvailabilitySlotResponse update(@Valid @RequestBody AvailabilityUpdateRequest request) {
+    public AvailabilitySlotResponse update(
+            @Valid @RequestBody AvailabilityUpdateRequest request,
+            @RequestHeader(value = "X-Admin-Token", required = false) String adminToken
+    ) {
+        adminAuthService.requireAdmin(adminToken);
         return availabilityService.setOpen(request.date(), request.time(), request.open());
     }
 }

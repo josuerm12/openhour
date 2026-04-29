@@ -111,7 +111,7 @@ class AppointmentServiceTest {
 
         assertThat(response.status()).isEqualTo(AppointmentStatus.CONFIRMED);
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(response.stripePaymentIntentId()).isEqualTo("pi_123");
+        assertThat(appointments.saved.get(0).getStripePaymentIntentId()).isEqualTo("pi_123");
         assertThat(activity.messages).containsExactly("Booked Silk Press for Maya Rivera on 2026-05-14 at 10:00 AM.");
     }
 

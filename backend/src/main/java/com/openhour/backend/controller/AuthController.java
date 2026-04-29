@@ -1,8 +1,7 @@
 package com.openhour.backend.controller;
 
+import com.openhour.backend.service.AdminAuthService;
 import jakarta.validation.constraints.NotBlank;
-import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,23 +10,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-    private final String adminUsername;
-    private final String adminPassword;
+    private final AdminAuthService adminAuthService;
 
-    public AuthController(
-            @Value("${ADMIN_USERNAME:owner}") String adminUsername,
-            @Value("${ADMIN_PASSWORD:openhour}") String adminPassword
-    ) {
-        this.adminUsername = adminUsername;
-        this.adminPassword = adminPassword;
+    public AuthController(AdminAuthService adminAuthService) {
+        this.adminAuthService = adminAuthService;
     }
 
     @PostMapping("/login")
-    public Map<String, Boolean> login(@RequestBody LoginRequest request) {
-        boolean authenticated = adminUsername.equals(request.username()) && adminPassword.equals(request.password());
-        return Map.of("authenticated", authenticated);
+    public LoginResponse login(@RequestBody LoginRequest request) {
+        return new LoginResponse(true, adminAuthService.login(request.username(), request.password()));
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {
+    }
+
+    public record LoginResponse(boolean authenticated, String token) {
     }
 }

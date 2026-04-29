@@ -8,7 +8,12 @@ Start the backend:
 
 ```bash
 cd backend
-STRIPE_SECRET_KEY=sk_test_your_key_here FRONTEND_URL=http://localhost:5500 mvn spring-boot:run
+STRIPE_SECRET_KEY=sk_test_your_key_here \
+ADMIN_USERNAME=owner \
+ADMIN_PASSWORD=choose-a-local-password \
+ADMIN_TOKEN=choose-a-long-random-token \
+FRONTEND_URL=http://localhost:5500 \
+mvn spring-boot:run
 ```
 
 Start the frontend from the repo root:
@@ -23,18 +28,18 @@ Open:
 http://localhost:5500/frontend/index.html
 ```
 
-Owner login defaults:
+Owner login:
 
 ```text
-username: owner
-password: openhour
+username: the value of ADMIN_USERNAME
+password: the value of ADMIN_PASSWORD
 ```
 
-You can override these with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+There are no committed default owner credentials. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_TOKEN` in your environment.
 
 ## Database
 
-Local data is stored in an H2 database at `backend/data/openhour`. The H2 console is available while the backend is running:
+Local data is stored in an H2 database at `backend/data/openhour`. To enable the H2 console for local debugging only, start the backend with `H2_CONSOLE_ENABLED=true`:
 
 ```text
 http://localhost:8080/h2-console
