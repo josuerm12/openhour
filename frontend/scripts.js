@@ -1,25 +1,17 @@
-const services = [
-    { name: "Silk Press", price: 75, deposit: 25 },
-    { name: "Knotless Braids", price: 180, deposit: 45 },
-    { name: "Loc Retwist", price: 95, deposit: 30 },
-    { name: "Wash and Style", price: 65, deposit: 20 },
-    { name: "Color Consultation", price: 40, deposit: 15 }
-];
+const API_BASE = window.OPENHOUR_API_BASE || "http://localhost:8080/api";
 
+let services = [];
 const defaultTimes = ["10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM", "6:00 PM"];
-const storageKeys = {
-    appointments: "openhour.appointments",
-    availability: "openhour.availability",
-    log: "openhour.log"
-};
 
 const state = {
-    calendarDate: new Date(2026, 3, 1),
+    calendarDate: new Date(),
     selectedDate: "",
     selectedTime: "",
     draft: {},
     latestAppointmentId: null,
-    adminAuthenticated: false
+    adminAuthenticated: false,
+    availability: [],
+    daySlots: []
 };
 
 const panels = document.querySelectorAll("[data-view-panel]");
@@ -35,68 +27,28 @@ const paymentSummary = document.querySelector("#paymentSummary");
 const confirmationSummary = document.querySelector("#confirmationSummary");
 const toast = document.querySelector("#toast");
 
-function readJson(key, fallback) {
-    try {
-        const value = localStorage.getItem(key);
-        return value ? JSON.parse(value) : fallback;
-    } catch (error) {
-        return fallback;
-    }
-}
-
-function writeJson(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-}
-
-function seedAvailability() {
-    const existing = readJson(storageKeys.availability, null);
-    if (existing) {
-        return existing;
-    }
-
-    const availability = {};
-    const start = new Date(2026, 3, 20);
-    for (let index = 0; index < 42; index += 1) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + index);
-        const day = date.getDay();
-        if (day !== 0 && day !== 1) {
-            availability[toDateKey(date)] = [...defaultTimes];
-        }
-    }
-
-    writeJson(storageKeys.availability, availability);
-    return availability;
-}
-
-function getAppointments() {
-    return readJson(storageKeys.appointments, []);
-}
-
-function setAppointments(appointments) {
-    writeJson(storageKeys.appointments, appointments);
-}
-
-function getAvailability() {
-    return seedAvailability();
-}
-
-function setAvailability(availability) {
-    writeJson(storageKeys.availability, availability);
-}
-
-function getLog() {
-    return readJson(storageKeys.log, []);
-}
-
-function addLog(message) {
-    const log = getLog();
-    log.unshift({
-        id: crypto.randomUUID(),
-        message,
-        createdAt: new Date().toLocaleString()
+async function api(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        },
+        ...options
     });
-    writeJson(storageKeys.log, log.slice(0, 30));
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Request failed: ${response.status}`);
+    }
+
+    if (response.status === 204) {
+        return null;
+    }
+    return response.json();
+}
+
+function centsToDollars(cents) {
+    return `$${(Number(cents || 0) / 100).toFixed(2)}`;
 }
 
 function toDateKey(date) {
@@ -120,7 +72,13 @@ function formatDate(dateKey) {
     });
 }
 
-function showView(viewName) {
+function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add("show");
+    window.setTimeout(() => toast.classList.remove("show"), 3200);
+}
+
+async function showView(viewName) {
     if (viewName === "adminDashboard" && !state.adminAuthenticated) {
         viewName = "adminLogin";
     }
@@ -129,47 +87,51 @@ function showView(viewName) {
         panel.classList.toggle("active", panel.dataset.viewPanel === viewName);
     });
 
-    if (viewName === "clientCalendar") {
-        renderCalendar();
-    }
-    if (viewName === "timeSelect") {
-        renderTimes();
-    }
-    if (viewName === "payment") {
-        renderPaymentSummary();
-    }
-    if (viewName === "adminDashboard") {
-        renderAdmin();
+    try {
+        if (viewName === "clientCalendar") {
+            await renderCalendar();
+        }
+        if (viewName === "timeSelect") {
+            await renderTimes();
+        }
+        if (viewName === "payment") {
+            renderPaymentSummary();
+        }
+        if (viewName === "adminDashboard") {
+            await renderAdmin();
+        }
+    } catch (error) {
+        showToast(error.message);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add("show");
-    window.setTimeout(() => toast.classList.remove("show"), 2800);
+function firstDayOfCalendarMonth() {
+    return new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
 }
 
-function getBookedTimes(dateKey) {
-    return getAppointments()
-        .filter((appointment) => appointment.date === dateKey && appointment.status === "confirmed")
-        .map((appointment) => appointment.time);
+function lastDayOfCalendarMonth() {
+    return new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0);
 }
 
-function getOpenTimes(dateKey) {
-    const availability = getAvailability();
-    const slots = availability[dateKey] || [];
-    const bookedTimes = getBookedTimes(dateKey);
-    return slots.filter((slot) => !bookedTimes.includes(slot));
+async function loadCalendarAvailability() {
+    const start = toDateKey(firstDayOfCalendarMonth());
+    const end = toDateKey(lastDayOfCalendarMonth());
+    state.availability = await api(`/availability?start=${start}&end=${end}`);
 }
 
-function renderCalendar() {
+function slotsForDate(dateKey) {
+    return state.availability.filter((slot) => slot.date === dateKey);
+}
+
+async function renderCalendar() {
+    await loadCalendarAvailability();
     const year = state.calendarDate.getFullYear();
     const month = state.calendarDate.getMonth();
-    const firstDay = new Date(year, month, 1);
+    const firstDay = firstDayOfCalendarMonth();
     const startOffset = firstDay.getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInMonth = lastDayOfCalendarMonth().getDate();
 
     calendarTitle.textContent = state.calendarDate.toLocaleDateString(undefined, {
         month: "long",
@@ -178,23 +140,23 @@ function renderCalendar() {
     calendarDays.innerHTML = "";
 
     for (let blank = 0; blank < startOffset; blank += 1) {
-        const spacer = document.createElement("span");
-        calendarDays.appendChild(spacer);
+        calendarDays.appendChild(document.createElement("span"));
     }
 
     for (let day = 1; day <= daysInMonth; day += 1) {
         const date = new Date(year, month, day);
         const dateKey = toDateKey(date);
-        const availability = getAvailability()[dateKey] || [];
-        const openTimes = getOpenTimes(dateKey);
+        const slots = slotsForDate(dateKey);
+        const openSlots = slots.filter((slot) => slot.open && !slot.booked);
+        const publishedSlots = slots.filter((slot) => slot.open);
         const button = document.createElement("button");
         button.type = "button";
         button.className = "calendar-day";
         button.textContent = day;
 
-        if (availability.length > 0 && openTimes.length > 0) {
+        if (openSlots.length > 0) {
             button.classList.add("available");
-        } else if (availability.length > 0) {
+        } else if (publishedSlots.length > 0) {
             button.classList.add("full");
             button.disabled = true;
         } else {
@@ -210,48 +172,46 @@ function renderCalendar() {
             state.selectedTime = "";
             showView("timeSelect");
         });
-
         calendarDays.appendChild(button);
     }
 }
 
-function renderTimes() {
+async function renderTimes() {
     selectedDateText.textContent = state.selectedDate
         ? `Open times for ${formatDate(state.selectedDate)}`
         : "Choose an open time slot for your appointment.";
 
-    timeList.innerHTML = "";
     continueToInfo.disabled = !state.selectedTime;
+    timeList.innerHTML = "";
+    state.daySlots = await api(`/availability/day?date=${state.selectedDate}`);
 
-    const availability = getAvailability()[state.selectedDate] || [];
-    const booked = getBookedTimes(state.selectedDate);
-
-    if (availability.length === 0) {
+    if (state.daySlots.length === 0) {
         timeList.innerHTML = "<p>No availability is published for this date.</p>";
         return;
     }
 
-    availability.forEach((time) => {
+    state.daySlots.forEach((slot) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "time-slot";
-        button.textContent = time;
-        button.disabled = booked.includes(time);
-        button.classList.toggle("active", state.selectedTime === time);
+        button.textContent = slot.time;
+        button.disabled = !slot.open || slot.booked;
+        button.classList.toggle("active", state.selectedTime === slot.time);
         button.addEventListener("click", () => {
-            state.selectedTime = time;
+            state.selectedTime = slot.time;
             renderTimes();
         });
         timeList.appendChild(button);
     });
 }
 
-function populateServices() {
+async function populateServices() {
+    services = await api("/services");
     serviceSelect.innerHTML = '<option value="">Select a service</option>';
     services.forEach((service) => {
         const option = document.createElement("option");
         option.value = service.name;
-        option.textContent = `${service.name} - $${service.price} ($${service.deposit} deposit)`;
+        option.textContent = `${service.name} - ${centsToDollars(service.priceCents)} (${centsToDollars(service.depositCents)} deposit)`;
         serviceSelect.appendChild(option);
     });
 }
@@ -311,8 +271,6 @@ function selectedService() {
 }
 
 function renderSummary(container, appointment) {
-    const service = services.find((item) => item.name === appointment.service) || selectedService();
-    const donation = Number(appointment.donation || 0);
     const rows = [
         ["Name", appointment.name],
         ["Service", appointment.service],
@@ -320,9 +278,9 @@ function renderSummary(container, appointment) {
         ["Time", appointment.time],
         ["Email", appointment.email],
         ["Phone", appointment.phone],
-        ["Deposit", `$${service.deposit}`],
-        ["Donation", `$${donation}`],
-        ["Confirmation", appointment.paymentId || "Pending"]
+        ["Deposit", centsToDollars(appointment.depositCents)],
+        ["Donation", centsToDollars(appointment.donationCents)],
+        ["Payment", appointment.paymentStatus || "Pending"]
     ];
 
     container.innerHTML = rows
@@ -331,82 +289,54 @@ function renderSummary(container, appointment) {
 }
 
 function renderPaymentSummary() {
+    const service = selectedService();
     renderSummary(paymentSummary, {
         ...state.draft,
         date: state.selectedDate,
         time: state.selectedTime,
-        donation: Number(document.querySelector("#donationAmount").value || 0),
-        paymentId: "Pending"
+        depositCents: service.depositCents,
+        donationCents: Number(document.querySelector("#donationAmount").value || 0) * 100,
+        paymentStatus: "Pending"
     });
 }
 
-function createAppointment() {
+async function createAppointment() {
     if (!state.selectedDate || !state.selectedTime || !state.draft.name) {
         showToast("Please complete the booking details first.");
-        showView("clientCalendar");
+        await showView("clientCalendar");
         return;
     }
 
-    if (!getOpenTimes(state.selectedDate).includes(state.selectedTime)) {
-        showToast("That time was just booked or blocked. Please choose another slot.");
-        showView("timeSelect");
-        return;
-    }
-
-    const service = selectedService();
-    const donation = Number(document.querySelector("#donationAmount").value || 0);
-    const appointment = {
-        id: crypto.randomUUID(),
-        ...state.draft,
-        date: state.selectedDate,
-        time: state.selectedTime,
-        donation,
-        deposit: service.deposit,
-        paymentId: `PAY-${Date.now().toString().slice(-6)}`,
-        status: "confirmed",
-        createdAt: new Date().toISOString()
-    };
-
-    const appointments = getAppointments();
-    appointments.push(appointment);
-    setAppointments(appointments);
-    state.latestAppointmentId = appointment.id;
-    addLog(`Booked ${appointment.service} for ${appointment.name} on ${formatDate(appointment.date)} at ${appointment.time}.`);
-    renderSummary(confirmationSummary, appointment);
-    showView("confirmation");
+    const response = await api("/appointments/checkout", {
+        method: "POST",
+        body: JSON.stringify({
+            ...state.draft,
+            date: state.selectedDate,
+            time: state.selectedTime,
+            donationCents: Number(document.querySelector("#donationAmount").value || 0) * 100
+        })
+    });
+    state.latestAppointmentId = response.appointmentId;
+    window.location.href = response.checkoutUrl;
 }
 
-function cancelAppointment(id) {
-    const appointments = getAppointments();
-    const appointment = appointments.find((item) => item.id === id);
-    if (!appointment) {
-        return;
-    }
-
-    const confirmed = window.confirm(`Cancel ${appointment.name}'s appointment on ${formatDate(appointment.date)} at ${appointment.time}?`);
+async function cancelAppointment(id) {
+    const confirmed = window.confirm("Cancel this appointment?");
     if (!confirmed) {
         return;
     }
-
-    appointment.status = "cancelled";
-    appointment.cancelledAt = new Date().toISOString();
-    setAppointments(appointments);
-    addLog(`Cancelled ${appointment.service} for ${appointment.name} on ${formatDate(appointment.date)}.`);
+    await api(`/appointments/${id}/cancel`, { method: "PATCH" });
     showToast("Appointment cancelled.");
-    renderCalendar();
-    renderAdmin();
+    await renderCalendar();
+    await renderAdmin();
 }
 
-function renderAdmin() {
-    renderAppointments();
-    renderAvailabilityEditor();
-    renderLog();
+async function renderAdmin() {
+    await Promise.all([renderAppointments(), renderAvailabilityEditor(), renderLog()]);
 }
 
-function renderAppointments() {
-    const appointments = getAppointments()
-        .filter((appointment) => appointment.status === "confirmed")
-        .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+async function renderAppointments() {
+    const appointments = await api("/appointments");
     const list = document.querySelector("#appointmentList");
     document.querySelector("#appointmentCount").textContent = `${appointments.length} booked`;
 
@@ -424,6 +354,7 @@ function renderAppointments() {
                 <strong>${appointment.name} - ${appointment.service}</strong>
                 <small>${formatDate(appointment.date)} at ${appointment.time}</small>
                 <small>${appointment.email} | ${appointment.phone}</small>
+                <small>${centsToDollars(appointment.depositCents + appointment.donationCents)} paid via Stripe</small>
             </div>
             <div class="appointment-actions">
                 <button class="mini-button" type="button" data-edit="${appointment.id}">Change Time</button>
@@ -442,82 +373,67 @@ function renderAppointments() {
     });
 }
 
-function moveAppointment(id) {
-    const appointments = getAppointments();
-    const appointment = appointments.find((item) => item.id === id);
-    if (!appointment) {
-        return;
-    }
+async function moveAppointment(id) {
+    const appointment = await api(`/appointments/${id}`);
+    const slots = await api(`/availability/day?date=${appointment.date}`);
+    const openSlot = slots.find((slot) => slot.open && !slot.booked && slot.time !== appointment.time);
 
-    const openTimes = getOpenTimes(appointment.date);
-    if (openTimes.length === 0) {
+    if (!openSlot) {
         showToast("No other open times are available on that date.");
         return;
     }
 
-    const nextTime = openTimes[0];
-    appointment.time = nextTime;
-    setAppointments(appointments);
-    addLog(`Changed ${appointment.name}'s appointment to ${nextTime} on ${formatDate(appointment.date)}.`);
-    showToast(`Appointment moved to ${nextTime}.`);
-    renderAdmin();
+    await api(`/appointments/${id}/move`, {
+        method: "PATCH",
+        body: JSON.stringify({ date: appointment.date, time: openSlot.time })
+    });
+    showToast(`Appointment moved to ${openSlot.time}.`);
+    await renderAdmin();
 }
 
-function renderAvailabilityEditor() {
+async function renderAvailabilityEditor() {
     const editor = document.querySelector("#availabilityEditor");
-    const availability = getAvailability();
-    const start = new Date(2026, 3, 20);
-    editor.innerHTML = "";
+    const start = toDateKey(new Date());
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 14);
+    const slots = await api(`/availability?start=${start}&end=${toDateKey(endDate)}`);
+    const grouped = slots.reduce((dates, slot) => {
+        dates[slot.date] = dates[slot.date] || [];
+        dates[slot.date].push(slot);
+        return dates;
+    }, {});
 
-    for (let index = 0; index < 14; index += 1) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + index);
-        const dateKey = toDateKey(date);
+    editor.innerHTML = "";
+    Object.entries(grouped).forEach(([dateKey, daySlots]) => {
         const day = document.createElement("section");
         day.className = "availability-day";
         day.innerHTML = `<h4>${formatDate(dateKey)}</h4><div class="availability-slots"></div>`;
-        const slots = day.querySelector(".availability-slots");
+        const slotContainer = day.querySelector(".availability-slots");
 
-        defaultTimes.forEach((time) => {
-            const isOpen = (availability[dateKey] || []).includes(time);
+        daySlots.forEach((slot) => {
             const button = document.createElement("button");
             button.type = "button";
-            button.className = `availability-slot ${isOpen ? "" : "blocked"}`;
-            button.textContent = time;
-            button.addEventListener("click", () => toggleSlot(dateKey, time));
-            slots.appendChild(button);
+            button.className = `availability-slot ${slot.open ? "" : "blocked"}`;
+            button.textContent = `${slot.time}${slot.booked ? " booked" : ""}`;
+            button.disabled = slot.booked;
+            button.addEventListener("click", () => toggleSlot(dateKey, slot.time, !slot.open));
+            slotContainer.appendChild(button);
         });
-
         editor.appendChild(day);
-    }
+    });
 }
 
-function toggleSlot(dateKey, time) {
-    const availability = getAvailability();
-    const slots = new Set(availability[dateKey] || []);
-    const isBooked = getBookedTimes(dateKey).includes(time);
-
-    if (isBooked) {
-        showToast("Booked slots cannot be blocked until the appointment is cancelled.");
-        return;
-    }
-
-    if (slots.has(time)) {
-        slots.delete(time);
-        addLog(`Blocked ${time} on ${formatDate(dateKey)}.`);
-    } else {
-        slots.add(time);
-        addLog(`Opened ${time} on ${formatDate(dateKey)}.`);
-    }
-
-    availability[dateKey] = defaultTimes.filter((slot) => slots.has(slot));
-    setAvailability(availability);
-    renderAdmin();
-    renderCalendar();
+async function toggleSlot(dateKey, time, open) {
+    await api("/availability", {
+        method: "PUT",
+        body: JSON.stringify({ date: dateKey, time, open })
+    });
+    await renderAdmin();
+    await renderCalendar();
 }
 
-function renderLog() {
-    const log = getLog();
+async function renderLog() {
+    const log = await api("/activity");
     const activityLog = document.querySelector("#activityLog");
 
     if (log.length === 0) {
@@ -526,7 +442,7 @@ function renderLog() {
     }
 
     activityLog.innerHTML = log
-        .map((entry) => `<article class="log-item"><strong>${entry.message}</strong><small>${entry.createdAt}</small></article>`)
+        .map((entry) => `<article class="log-item"><strong>${entry.message}</strong><small>${new Date(entry.createdAt).toLocaleString()}</small></article>`)
         .join("");
 }
 
@@ -539,18 +455,48 @@ function switchAdminPanel(panelName) {
     });
 }
 
+async function handleStripeReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (!payment) {
+        return false;
+    }
+
+    if (payment === "success") {
+        const appointmentId = params.get("appointmentId");
+        const sessionId = params.get("session_id");
+        const appointment = await api(`/appointments/${appointmentId}/confirm?session_id=${encodeURIComponent(sessionId)}`, {
+            method: "POST"
+        });
+        state.latestAppointmentId = appointment.id;
+        renderSummary(confirmationSummary, appointment);
+        await showView("confirmation");
+        return true;
+    }
+
+    if (payment === "donation_success") {
+        document.querySelector("#donationStatus").textContent = "Donation payment completed through Stripe.";
+        await showView("donation");
+        return true;
+    }
+
+    showToast("Stripe checkout was cancelled.");
+    await showView(payment === "donation_cancelled" ? "donation" : "clientCalendar");
+    return true;
+}
+
 navButtons.forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.view));
 });
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
     state.calendarDate.setMonth(state.calendarDate.getMonth() - 1);
-    renderCalendar();
+    renderCalendar().catch((error) => showToast(error.message));
 });
 
 document.querySelector("#nextMonth").addEventListener("click", () => {
     state.calendarDate.setMonth(state.calendarDate.getMonth() + 1);
-    renderCalendar();
+    renderCalendar().catch((error) => showToast(error.message));
 });
 
 continueToInfo.addEventListener("click", () => showView("clientInfo"));
@@ -563,38 +509,54 @@ bookingForm.addEventListener("submit", (event) => {
 });
 
 document.querySelector("#donationAmount").addEventListener("input", renderPaymentSummary);
-document.querySelector("#confirmPayment").addEventListener("click", createAppointment);
+document.querySelector("#confirmPayment").addEventListener("click", () => {
+    createAppointment().catch((error) => showToast(error.message));
+});
 
 document.querySelector("#cancelLatest").addEventListener("click", () => {
     if (state.latestAppointmentId) {
-        cancelAppointment(state.latestAppointmentId);
-        showView("clientCalendar");
+        cancelAppointment(state.latestAppointmentId).then(() => showView("clientCalendar"));
     }
 });
 
-document.querySelector("#sendDonation").addEventListener("click", () => {
+document.querySelector("#sendDonation").addEventListener("click", async () => {
     const amount = Number(document.querySelector("#standaloneDonation").value || 0);
     const status = document.querySelector("#donationStatus");
     if (amount < 1) {
         status.textContent = "Enter a donation amount of at least $1.";
         return;
     }
-    addLog(`Received a $${amount} donation.`);
-    status.textContent = `Donation confirmation DON-${Date.now().toString().slice(-6)} recorded.`;
+    try {
+        const response = await api("/donations/checkout", {
+            method: "POST",
+            body: JSON.stringify({ amountCents: amount * 100 })
+        });
+        window.location.href = response.checkoutUrl;
+    } catch (error) {
+        status.textContent = error.message;
+    }
 });
 
-document.querySelector("#adminForm").addEventListener("submit", (event) => {
+document.querySelector("#adminForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const username = document.querySelector("#adminUsername").value.trim();
     const password = document.querySelector("#adminPassword").value;
     setFieldError("adminUsername", "");
     setFieldError("adminPassword", "");
 
-    if (username === "owner" && password === "openhour") {
-        state.adminAuthenticated = true;
-        showView("adminDashboard");
-    } else {
-        setFieldError("adminPassword", "Use owner / openhour for this prototype.");
+    try {
+        const result = await api("/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ username, password })
+        });
+        if (result.authenticated) {
+            state.adminAuthenticated = true;
+            await showView("adminDashboard");
+        } else {
+            setFieldError("adminPassword", "Invalid owner credentials.");
+        }
+    } catch (error) {
+        setFieldError("adminPassword", error.message);
     }
 });
 
@@ -607,6 +569,14 @@ document.querySelectorAll("[data-admin-tab]").forEach((tab) => {
     tab.addEventListener("click", () => switchAdminPanel(tab.dataset.adminTab));
 });
 
-populateServices();
-seedAvailability();
-renderCalendar();
+(async function init() {
+    try {
+        await populateServices();
+        const handledReturn = await handleStripeReturn();
+        if (!handledReturn) {
+            await renderCalendar();
+        }
+    } catch (error) {
+        showToast(error.message);
+    }
+})();

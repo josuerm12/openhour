@@ -23,6 +23,7 @@ logs/
 target/
 build/
 out/
+backend/data/
 
 # Maven wrapper generated files
 .mvn/wrapper/maven-wrapper.jar
