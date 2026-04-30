@@ -116,9 +116,60 @@ class AppointmentServiceTest {
     }
 
     @Test
+    void confirmRejectsIncompleteStripePaymentWithoutSavingAppointment() {
+        Appointment appointment = pendingAppointment();
+        appointment.setStripeSessionId("cs_pending");
+        appointments.appointmentById = Optional.of(appointment);
+        availability.openAndUnbooked = true;
+        stripe.retrievedSession = new StripeCheckoutSession("cs_pending", null, "unpaid", null);
+
+        assertThatThrownBy(() -> appointmentService.confirm(42L, "cs_pending"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Payment has not been completed");
+
+        assertThat(stripe.retrieveCheckoutCalls).isEqualTo(1);
+        assertThat(appointments.saved).isEmpty();
+        assertThat(activity.messages).isEmpty();
+    }
+
+    @Test
+    void confirmCancelsPendingAppointmentWhenSlotWasTakenBeforePaymentReturn() {
+        Appointment appointment = pendingAppointment();
+        appointment.setStripeSessionId("cs_paid");
+        appointments.appointmentById = Optional.of(appointment);
+        availability.openAndUnbooked = false;
+
+        assertThatThrownBy(() -> appointmentService.confirm(42L, "cs_paid"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("already taken");
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(appointment.getPaymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stripe.retrieveCheckoutCalls).isZero();
+        assertThat(appointments.saved).isEmpty();
+    }
+
+    @Test
+    void confirmAllowsAlreadyConfirmedAppointmentEvenWhenSlotIsBooked() {
+        Appointment appointment = pendingAppointment();
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        appointment.setStripeSessionId("cs_paid");
+        appointments.appointmentById = Optional.of(appointment);
+        availability.openAndUnbooked = false;
+        stripe.retrievedSession = new StripeCheckoutSession("cs_paid", null, "paid", "pi_repeat");
+
+        AppointmentResponse response = appointmentService.confirm(42L, "cs_paid");
+
+        assertThat(response.status()).isEqualTo(AppointmentStatus.CONFIRMED);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(stripe.retrieveCheckoutCalls).isEqualTo(1);
+        assertThat(appointments.saved).hasSize(1);
+    }
+
+    @Test
     void moveRejectsUnavailableDestinationSlot() {
         Appointment appointment = pendingAppointment();
-        MoveAppointmentRequest request = new MoveAppointmentRequest(LocalDate.of(2026, 5, 16), "2:00 PM");
+        MoveAppointmentRequest request = new MoveAppointmentRequest(LocalDate.of(2026, 5, 16), "11:00 AM");
         appointments.appointmentById = Optional.of(appointment);
         availability.openAndUnbooked = false;
 
@@ -127,6 +178,33 @@ class AppointmentServiceTest {
                 .hasMessageContaining("not available");
 
         assertThat(appointments.saved).isEmpty();
+    }
+
+    @Test
+    void moveUpdatesAppointmentWhenDestinationSlotIsAvailable() {
+        Appointment appointment = pendingAppointment();
+        MoveAppointmentRequest request = new MoveAppointmentRequest(LocalDate.of(2026, 5, 16), "11:00 AM");
+        appointments.appointmentById = Optional.of(appointment);
+        availability.openAndUnbooked = true;
+
+        AppointmentResponse response = appointmentService.move(42L, request);
+
+        assertThat(response.date()).isEqualTo(LocalDate.of(2026, 5, 16));
+        assertThat(response.time()).isEqualTo("11:00 AM");
+        assertThat(appointments.saved).containsExactly(appointment);
+        assertThat(activity.messages).containsExactly("Changed Maya Rivera's appointment to 11:00 AM on 2026-05-16.");
+    }
+
+    @Test
+    void cancelMarksAppointmentCancelledAndRecordsActivity() {
+        Appointment appointment = pendingAppointment();
+        appointments.appointmentById = Optional.of(appointment);
+
+        AppointmentResponse response = appointmentService.cancel(42L);
+
+        assertThat(response.status()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(appointments.saved).containsExactly(appointment);
+        assertThat(activity.messages).containsExactly("Cancelled Silk Press for Maya Rivera on 2026-05-14.");
     }
 
     private AppointmentRequest bookingRequest() {
@@ -171,6 +249,7 @@ class AppointmentServiceTest {
                             yield appointment;
                         }
                         case "findById" -> appointmentById;
+                        case "findByStatusOrderByAppointmentDateAscAppointmentTimeAsc" -> List.of();
                         case "toString" -> "FakeAppointmentRepository";
                         default -> throw new UnsupportedOperationException("Unexpected repository call: " + method.getName());
                     }

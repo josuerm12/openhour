@@ -1,7 +1,41 @@
 const API_BASE = window.OPENHOUR_API_BASE || "http://localhost:8080/api";
 
 let services = [];
-const defaultTimes = ["10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM", "6:00 PM"];
+const defaultTimes = [
+    "8:00 AM",
+    "8:30 AM",
+    "9:00 AM",
+    "9:30 AM",
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "12:00 PM",
+    "12:30 PM",
+    "1:00 PM",
+    "1:30 PM",
+    "2:00 PM",
+    "2:30 PM",
+    "3:00 PM",
+    "3:30 PM",
+    "4:00 PM",
+    "4:30 PM",
+    "5:00 PM",
+    "5:30 PM",
+    "6:00 PM",
+    "6:30 PM",
+    "7:00 PM",
+    "7:30 PM",
+    "8:00 PM",
+    "8:30 PM",
+    "9:00 PM",
+    "9:30 PM",
+    "10:00 PM",
+    "10:30 PM",
+    "11:00 PM",
+    "11:30 PM",
+    "12:00 AM"
+];
 
 const state = {
     calendarDate: new Date(),
@@ -12,7 +46,8 @@ const state = {
     adminAuthenticated: false,
     adminToken: "",
     availability: [],
-    daySlots: []
+    daySlots: [],
+    adminAvailabilityStart: new Date()
 };
 
 const panels = document.querySelectorAll("[data-view-panel]");
@@ -26,15 +61,16 @@ const bookingForm = document.querySelector("#bookingForm");
 const serviceSelect = document.querySelector("#serviceSelect");
 const paymentSummary = document.querySelector("#paymentSummary");
 const confirmationSummary = document.querySelector("#confirmationSummary");
+const availabilityRangeLabel = document.querySelector("#availabilityRangeLabel");
 const toast = document.querySelector("#toast");
 
 async function api(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
         headers: {
             "Content-Type": "application/json",
             ...(options.headers || {})
-        },
-        ...options
+        }
     });
 
     if (!response.ok) {
@@ -63,9 +99,19 @@ function toDateKey(date) {
     return `${year}-${month}-${day}`;
 }
 
+function todayDateKey() {
+    return toDateKey(new Date());
+}
+
 function parseDateKey(dateKey) {
     const [year, month, day] = dateKey.split("-").map(Number);
     return new Date(year, month - 1, day);
+}
+
+function addDays(date, days) {
+    const copy = new Date(date);
+    copy.setDate(copy.getDate() + days);
+    return copy;
 }
 
 function formatDate(dateKey) {
@@ -151,6 +197,7 @@ async function renderCalendar() {
     for (let day = 1; day <= daysInMonth; day += 1) {
         const date = new Date(year, month, day);
         const dateKey = toDateKey(date);
+        const isPastDate = dateKey < todayDateKey();
         const slots = slotsForDate(dateKey);
         const openSlots = slots.filter((slot) => slot.open && !slot.booked);
         const publishedSlots = slots.filter((slot) => slot.open);
@@ -159,7 +206,9 @@ async function renderCalendar() {
         button.className = "calendar-day";
         button.textContent = day;
 
-        if (openSlots.length > 0) {
+        if (isPastDate) {
+            button.disabled = true;
+        } else if (openSlots.length > 0) {
             button.classList.add("available");
         } else if (publishedSlots.length > 0) {
             button.classList.add("full");
@@ -401,10 +450,13 @@ async function moveAppointment(id) {
 
 async function renderAvailabilityEditor() {
     const editor = document.querySelector("#availabilityEditor");
-    const start = toDateKey(new Date());
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 14);
-    const slots = await api(`/availability?start=${start}&end=${toDateKey(endDate)}`);
+    const startDate = new Date(state.adminAvailabilityStart);
+    const endDate = addDays(startDate, 6);
+    const start = toDateKey(startDate);
+    const end = toDateKey(endDate);
+    availabilityRangeLabel.textContent = `${formatDate(start)} - ${formatDate(end)}`;
+
+    const slots = await api(`/availability?start=${start}&end=${end}`);
     const grouped = slots.reduce((dates, slot) => {
         dates[slot.date] = dates[slot.date] || [];
         dates[slot.date].push(slot);
@@ -415,8 +467,19 @@ async function renderAvailabilityEditor() {
     Object.entries(grouped).forEach(([dateKey, daySlots]) => {
         const day = document.createElement("section");
         day.className = "availability-day";
-        day.innerHTML = `<h4>${formatDate(dateKey)}</h4><div class="availability-slots"></div>`;
+        day.innerHTML = `
+            <div class="availability-day-header">
+                <h4>${formatDate(dateKey)}</h4>
+                <div class="availability-day-actions">
+                    <button class="mini-button" type="button" data-open-day>Open day</button>
+                    <button class="mini-button danger" type="button" data-block-day>Block day</button>
+                </div>
+            </div>
+            <div class="availability-slots"></div>
+        `;
         const slotContainer = day.querySelector(".availability-slots");
+        day.querySelector("[data-open-day]").addEventListener("click", () => toggleDay(dateKey, daySlots, true));
+        day.querySelector("[data-block-day]").addEventListener("click", () => toggleDay(dateKey, daySlots, false));
 
         daySlots.forEach((slot) => {
             const button = document.createElement("button");
@@ -424,21 +487,49 @@ async function renderAvailabilityEditor() {
             button.className = `availability-slot ${slot.open ? "" : "blocked"}`;
             button.textContent = `${slot.time}${slot.booked ? " booked" : ""}`;
             button.disabled = slot.booked;
-            button.addEventListener("click", () => toggleSlot(dateKey, slot.time, !slot.open));
+            button.addEventListener("click", () => toggleSlot(dateKey, slot.time, !slot.open, button));
             slotContainer.appendChild(button);
         });
         editor.appendChild(day);
     });
 }
 
-async function toggleSlot(dateKey, time, open) {
-    await api("/availability", {
-        method: "PUT",
-        headers: adminHeaders(),
-        body: JSON.stringify({ date: dateKey, time, open })
-    });
-    await renderAdmin();
-    await renderCalendar();
+async function toggleSlot(dateKey, time, open, button) {
+    button.disabled = true;
+    try {
+        await api("/availability", {
+            method: "PUT",
+            headers: adminHeaders(),
+            body: JSON.stringify({ date: dateKey, time, open })
+        });
+        showToast(`${open ? "Opened" : "Blocked"} ${time} on ${formatDate(dateKey)}.`);
+        await renderAvailabilityEditor();
+        await renderCalendar();
+    } catch (error) {
+        showToast(error.message);
+        button.disabled = false;
+    }
+}
+
+async function toggleDay(dateKey, slots, open) {
+    const editableSlots = slots.filter((slot) => !slot.booked && slot.open !== open);
+    if (editableSlots.length === 0) {
+        showToast(open ? "That day is already open." : "That day is already blocked.");
+        return;
+    }
+
+    try {
+        await Promise.all(editableSlots.map((slot) => api("/availability", {
+            method: "PUT",
+            headers: adminHeaders(),
+            body: JSON.stringify({ date: dateKey, time: slot.time, open })
+        })));
+        showToast(`${open ? "Opened" : "Blocked"} ${formatDate(dateKey)}.`);
+        await renderAvailabilityEditor();
+        await renderCalendar();
+    } catch (error) {
+        showToast(error.message);
+    }
 }
 
 async function renderLog() {
@@ -506,6 +597,21 @@ document.querySelector("#prevMonth").addEventListener("click", () => {
 document.querySelector("#nextMonth").addEventListener("click", () => {
     state.calendarDate.setMonth(state.calendarDate.getMonth() + 1);
     renderCalendar().catch((error) => showToast(error.message));
+});
+
+document.querySelector("#previousAvailabilityRange").addEventListener("click", () => {
+    state.adminAvailabilityStart = addDays(state.adminAvailabilityStart, -7);
+    renderAvailabilityEditor().catch((error) => showToast(error.message));
+});
+
+document.querySelector("#todayAvailabilityRange").addEventListener("click", () => {
+    state.adminAvailabilityStart = new Date();
+    renderAvailabilityEditor().catch((error) => showToast(error.message));
+});
+
+document.querySelector("#nextAvailabilityRange").addEventListener("click", () => {
+    state.adminAvailabilityStart = addDays(state.adminAvailabilityStart, 7);
+    renderAvailabilityEditor().catch((error) => showToast(error.message));
 });
 
 continueToInfo.addEventListener("click", () => showView("clientInfo"));

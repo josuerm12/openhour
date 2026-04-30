@@ -7,13 +7,48 @@ import com.openhour.backend.model.AvailabilitySlot;
 import com.openhour.backend.repository.AppointmentRepository;
 import com.openhour.backend.repository.AvailabilitySlotRepository;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AvailabilityService {
-    public static final List<String> DEFAULT_TIMES = List.of("10:00 AM", "12:00 PM", "2:00 PM", "4:00 PM", "6:00 PM");
+    public static final List<String> DEFAULT_TIMES = List.of(
+            "8:00 AM",
+            "8:30 AM",
+            "9:00 AM",
+            "9:30 AM",
+            "10:00 AM",
+            "10:30 AM",
+            "11:00 AM",
+            "11:30 AM",
+            "12:00 PM",
+            "12:30 PM",
+            "1:00 PM",
+            "1:30 PM",
+            "2:00 PM",
+            "2:30 PM",
+            "3:00 PM",
+            "3:30 PM",
+            "4:00 PM",
+            "4:30 PM",
+            "5:00 PM",
+            "5:30 PM",
+            "6:00 PM",
+            "6:30 PM",
+            "7:00 PM",
+            "7:30 PM",
+            "8:00 PM",
+            "8:30 PM",
+            "9:00 PM",
+            "9:30 PM",
+            "10:00 PM",
+            "10:30 PM",
+            "11:00 PM",
+            "11:30 PM",
+            "12:00 AM"
+    );
 
     private final AvailabilitySlotRepository availabilitySlotRepository;
     private final AppointmentRepository appointmentRepository;
@@ -32,6 +67,8 @@ public class AvailabilityService {
     public List<AvailabilitySlotResponse> list(LocalDate start, LocalDate end) {
         ensureSeeded(start, end);
         return availabilitySlotRepository.findBySlotDateBetweenOrderBySlotDateAscSlotTimeAsc(start, end).stream()
+                .filter(slot -> DEFAULT_TIMES.contains(slot.getSlotTime()))
+                .sorted(slotOrder())
                 .map(this::toResponse)
                 .toList();
     }
@@ -39,6 +76,8 @@ public class AvailabilityService {
     public List<AvailabilitySlotResponse> listForDate(LocalDate date) {
         ensureSeeded(date, date);
         return availabilitySlotRepository.findBySlotDateOrderBySlotTimeAsc(date).stream()
+                .filter(slot -> DEFAULT_TIMES.contains(slot.getSlotTime()))
+                .sorted(slotOrder())
                 .map(this::toResponse)
                 .toList();
     }
@@ -83,7 +122,7 @@ public class AvailabilityService {
 
     private boolean isDefaultOpen(LocalDate date) {
         int day = date.getDayOfWeek().getValue();
-        return day != 7 && day != 1;
+        return day != 7;
     }
 
     private AvailabilitySlotResponse toResponse(AvailabilitySlot slot) {
@@ -93,5 +132,10 @@ public class AvailabilityService {
 
     private boolean isBooked(LocalDate date, String time) {
         return appointmentRepository.existsByAppointmentDateAndAppointmentTimeAndStatus(date, time, AppointmentStatus.CONFIRMED);
+    }
+
+    private Comparator<AvailabilitySlot> slotOrder() {
+        return Comparator.comparing(AvailabilitySlot::getSlotDate)
+                .thenComparing(slot -> DEFAULT_TIMES.indexOf(slot.getSlotTime()));
     }
 }

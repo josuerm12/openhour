@@ -207,7 +207,12 @@
                 <div class="admin-panel" data-admin-panel="availability">
                     <div class="panel-heading">
                         <h3>Publish Availability</h3>
-                        <span>Click a slot to open or block it</span>
+                        <div class="availability-range-controls" aria-label="Availability date range">
+                            <button class="mini-button" type="button" id="previousAvailabilityRange">Previous</button>
+                            <span id="availabilityRangeLabel">This week</span>
+                            <button class="mini-button" type="button" id="todayAvailabilityRange">Today</button>
+                            <button class="mini-button" type="button" id="nextAvailabilityRange">Next</button>
+                        </div>
                     </div>
                     <div class="availability-editor" id="availabilityEditor"></div>
                 </div>

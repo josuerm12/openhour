@@ -576,6 +576,19 @@ button:focus-visible {
     font-size: 0.9rem;
 }
 
+.availability-range-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+}
+
+.availability-range-controls span {
+    min-width: 220px;
+    text-align: center;
+}
+
 .appointment-list {
     display: grid;
     gap: 10px;
@@ -627,8 +640,22 @@ button:focus-visible {
     background: var(--white);
 }
 
+.availability-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
 .availability-day h4 {
-    margin: 0 0 12px;
+    margin: 0;
+}
+
+.availability-day-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .availability-slots {
@@ -731,5 +758,26 @@ button:focus-visible {
 
     .appointment-actions {
         justify-content: start;
+    }
+
+    .panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .availability-range-controls {
+        justify-content: start;
+        width: 100%;
+    }
+
+    .availability-range-controls span {
+        min-width: 0;
+        width: 100%;
+        text-align: left;
+    }
+
+    .availability-day-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
