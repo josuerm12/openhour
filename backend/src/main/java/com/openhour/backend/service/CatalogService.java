@@ -8,10 +8,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class CatalogService {
     private final List<ServiceOfferingDTO> services = List.of(
-            new ServiceOfferingDTO("Silk Press", 7500, 2500),
-            new ServiceOfferingDTO("Knotless Braids", 18000, 4500),
-            new ServiceOfferingDTO("Loc Retwist", 9500, 3000),
-            new ServiceOfferingDTO("Wash and Style", 6500, 2000),
+            new ServiceOfferingDTO("Silk Press", 7500, 1500),
+            new ServiceOfferingDTO("Knotless Braids", 18000, 1500),
+            new ServiceOfferingDTO("Loc Retwist", 9500, 1500),
+            new ServiceOfferingDTO("Wash and Style", 6500, 1500),
             new ServiceOfferingDTO("Color Consultation", 4000, 1500)
     );
 

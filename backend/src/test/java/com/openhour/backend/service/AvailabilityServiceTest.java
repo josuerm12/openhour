@@ -42,7 +42,7 @@ class AvailabilityServiceTest {
 
         List<AvailabilitySlotResponse> responses = availabilityService.list(monday, sunday);
 
-        assertThat(responses).hasSize(231);
+        assertThat(responses).hasSize(21);
         assertThat(responses)
                 .filteredOn(response -> response.date().equals(monday))
                 .allMatch(AvailabilitySlotResponse::open);
@@ -80,9 +80,9 @@ class AvailabilityServiceTest {
     @Test
     void setOpenRejectsBlockingBookedSlots() {
         LocalDate date = LocalDate.of(2026, 5, 16);
-        appointments.bookedSlots.add(slotKey(date, "10:00 AM"));
+        appointments.bookedSlots.add(slotKey(date, "8:00 AM - 12:00 PM"));
 
-        assertThatThrownBy(() -> availabilityService.setOpen(date, "10:00 AM", false))
+        assertThatThrownBy(() -> availabilityService.setOpen(date, "8:00 AM - 12:00 PM", false))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Booked slots cannot be blocked");
 
@@ -94,14 +94,14 @@ class AvailabilityServiceTest {
     void setOpenCreatesOrUpdatesSlotAndRecordsActivity() {
         LocalDate date = LocalDate.of(2026, 5, 18);
 
-        AvailabilitySlotResponse response = availabilityService.setOpen(date, "12:00 PM", true);
+        AvailabilitySlotResponse response = availabilityService.setOpen(date, "1:00 PM - 5:00 PM", true);
 
         assertThat(response.date()).isEqualTo(date);
-        assertThat(response.time()).isEqualTo("12:00 PM");
+        assertThat(response.time()).isEqualTo("1:00 PM - 5:00 PM");
         assertThat(response.open()).isTrue();
         assertThat(response.booked()).isFalse();
         assertThat(slots.saved).hasSize(1);
-        assertThat(activity.messages).containsExactly("Opened 12:00 PM on 2026-05-18.");
+        assertThat(activity.messages).containsExactly("Opened 1:00 PM - 5:00 PM on 2026-05-18.");
     }
 
     private static String slotKey(LocalDate date, String time) {

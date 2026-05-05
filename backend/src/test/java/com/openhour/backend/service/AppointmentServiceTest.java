@@ -78,7 +78,7 @@ class AppointmentServiceTest {
         Appointment updatedAppointment = appointments.saved.get(1);
         assertThat(savedAppointment.getCustomerName()).isEqualTo("Maya Rivera");
         assertThat(savedAppointment.getServiceName()).isEqualTo("Silk Press");
-        assertThat(savedAppointment.getDepositCents()).isEqualTo(2500);
+        assertThat(savedAppointment.getDepositCents()).isEqualTo(1500);
         assertThat(savedAppointment.getDonationCents()).isEqualTo(500);
         assertThat(savedAppointment.getStatus()).isEqualTo(AppointmentStatus.PENDING_PAYMENT);
         assertThat(updatedAppointment.getStripeSessionId()).isEqualTo("cs_test_123");
@@ -229,7 +229,7 @@ class AppointmentServiceTest {
         appointment.setNotes("Shoulder length");
         appointment.setAppointmentDate(LocalDate.of(2026, 5, 14));
         appointment.setAppointmentTime("10:00 AM");
-        appointment.setDepositCents(2500);
+        appointment.setDepositCents(1500);
         appointment.setDonationCents(500);
         return appointment;
     }
